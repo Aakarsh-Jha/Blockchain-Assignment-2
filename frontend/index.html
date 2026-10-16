@@ -36,6 +36,20 @@
       </div>
     </header>
 
+    <!-- Active Wallet Role & Switcher Bar -->
+    <div id="accountBar" class="account-bar">
+      <div class="account-info-pill">
+        <span>Active Wallet:</span>
+        <span id="activeAccountDisplay" style="font-family: monospace; color: #a5b4fc; font-weight: 600;">Not connected</span>
+        <span id="activeRoleBadge" class="role-badge role-admin">Authority (Owner)</span>
+      </div>
+      <div>
+        <button id="switchRoleBtn" class="btn btn-outline" style="padding: 4px 10px; font-size: 0.75rem;" onclick="toggleSimulatedAccount()">
+          Switch Account (Test Unauthorized Access)
+        </button>
+      </div>
+    </div>
+
     <!-- Contract Address Configuration Card -->
     <section class="config-card">
       <div class="config-row">
@@ -239,6 +253,9 @@
     </section>
 
   </div>
+
+  <!-- Toast Alerts Container -->
+  <div id="toastContainer" class="toast-container"></div>
 
   <!-- Ethers.js v6 CDN -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.2/ethers.umd.min.js"></script>
