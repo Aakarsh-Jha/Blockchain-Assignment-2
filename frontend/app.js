@@ -193,6 +193,30 @@ async function connectWallet() {
     const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
     currentAccount = accounts[0];
 
+    // Prompt MetaMask to switch to Ganache Local (Chain ID 1337)
+    try {
+      await window.ethereum.request({
+        method: "wallet_switchEthereumChain",
+        params: [{ chainId: "0x539" }]
+      });
+    } catch (switchError) {
+      if (switchError.code === 4902) {
+        try {
+          await window.ethereum.request({
+            method: "wallet_addEthereumChain",
+            params: [{
+              chainId: "0x539",
+              chainName: "Ganache Local",
+              rpcUrls: ["http://127.0.0.1:8545"],
+              nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 }
+            }]
+          });
+        } catch (addError) {
+          console.warn("User dismissed network add:", addError);
+        }
+      }
+    }
+
     provider = new ethers.BrowserProvider(window.ethereum);
     signer = await provider.getSigner();
     const network = await provider.getNetwork();
