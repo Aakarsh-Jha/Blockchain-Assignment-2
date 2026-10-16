@@ -37,15 +37,16 @@
     </header>
 
     <!-- Active Wallet Role & Switcher Bar -->
-    <div id="accountBar" class="account-bar">
+    <!-- Active Wallet Role & Switcher Bar -->
+    <div id="accountBar" class="account-bar" style="display: none;">
       <div class="account-info-pill">
         <span>Active Wallet:</span>
         <span id="activeAccountDisplay" style="font-family: monospace; color: #a5b4fc; font-weight: 600;">Not connected</span>
         <span id="activeRoleBadge" class="role-badge role-admin">Authority (Owner)</span>
       </div>
       <div>
-        <button id="switchRoleBtn" class="btn btn-outline" style="padding: 4px 10px; font-size: 0.75rem;" onclick="toggleSimulatedAccount()">
-          Switch Account (Test Unauthorized Access)
+        <button id="switchRoleBtn" class="btn btn-outline" style="padding: 4px 10px; font-size: 0.75rem;" onclick="requestAccountSwitch()">
+          Switch Account in MetaMask
         </button>
       </div>
     </div>
@@ -59,13 +60,13 @@
             type="text" 
             id="contractAddressInput" 
             class="input-text" 
-            placeholder="0x... (Paste your Remix/Ganache deployed contract address)" 
+            placeholder="0x... (Paste your deployed contract address from Remix)" 
           />
         </div>
         <button id="loadContractBtn" class="btn btn-outline">Load Contract</button>
       </div>
       <div style="font-size: 0.78rem; color: var(--text-muted); display: flex; justify-content: space-between;">
-        <span>Deploy using Remix IDE (Ganache / Sepolia) and paste the address above.</span>
+        <span>Deploy using Remix IDE and paste the address above.</span>
         <span id="contractStatusText" style="color: #a5b4fc;">Status: Contract not loaded</span>
       </div>
     </section>
@@ -106,18 +107,18 @@
 
         <!-- Tab 1: Issue Certificate Form -->
         <div id="tabIssueContent">
-          <form id="issueCertForm" onsubmit="handleIssueCertificate(event)">
+          <form id="issueCertForm" onsubmit="handleIssueCertificate(event)" novalidate>
             <div class="form-group">
-              <label for="studentNameInput">Student Full Name *</label>
-              <input type="text" id="studentNameInput" class="form-control" placeholder="e.g. Aarav Sharma" required />
+              <label for="studentNameInput">Student Full Name</label>
+              <input type="text" id="studentNameInput" class="form-control" placeholder="e.g. Aarav Sharma" />
             </div>
             <div class="form-group">
-              <label for="courseNameInput">Degree / Course Name *</label>
-              <input type="text" id="courseNameInput" class="form-control" placeholder="e.g. B.Tech Computer Science & Engineering" required />
+              <label for="courseNameInput">Degree / Course Name</label>
+              <input type="text" id="courseNameInput" class="form-control" placeholder="e.g. B.Tech Computer Science & Engineering" />
             </div>
             <div class="form-group">
-              <label for="certHashInput">Certificate Ref / Roll Hash *</label>
-              <input type="text" id="certHashInput" class="form-control" placeholder="e.g. REG-2024-CSE-8921" required />
+              <label for="certHashInput">Certificate Ref / Roll Hash</label>
+              <input type="text" id="certHashInput" class="form-control" placeholder="e.g. REG-2024-CSE-8921" />
             </div>
             <button type="submit" id="submitIssueBtn" class="btn btn-primary" style="width: 100%; margin-top: 8px;">
               Issue Certificate on Blockchain
@@ -127,10 +128,10 @@
 
         <!-- Tab 2: Revoke Certificate Form -->
         <div id="tabRevokeContent" style="display: none;">
-          <form id="revokeCertForm" onsubmit="handleRevokeCertificate(event)">
+          <form id="revokeCertForm" onsubmit="handleRevokeCertificate(event)" novalidate>
             <div class="form-group">
-              <label for="revokeIdInput">Certificate ID to Revoke *</label>
-              <input type="number" id="revokeIdInput" class="form-control" placeholder="e.g. 1" min="1" required />
+              <label for="revokeIdInput">Certificate ID to Revoke</label>
+              <input type="number" id="revokeIdInput" class="form-control" placeholder="e.g. 1" min="1" />
             </div>
             <p style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 14px;">
               Revoking marks the certificate permanently invalid on the blockchain for anti-fraud auditing.

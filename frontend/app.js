@@ -1,10 +1,13 @@
 /**
  * CertiTrust Frontend Application Logic
- * Integrates MetaMask with Ethers.js v6
+ * Pure Web3 Integration with MetaMask & Ethers.js v6
  * CSE4444 Blockchain Technology Assignment 2
+ *
+ * NOTE: All interactions strictly call the on-chain smart contract.
+ * No simulated data or client-side bypasses.
  */
 
-// Contract ABI matching CertificateVerifier.sol
+// Contract ABI matching CertificateVerifier.sol exactly
 const CONTRACT_ABI = [
   {
     "inputs": [{ "internalType": "string", "name": "_institutionName", "type": "string" }],
@@ -112,31 +115,12 @@ const CONTRACT_ABI = [
   }
 ];
 
-// Pre-configured Defaults
-const DEFAULT_CONTRACT = "0x742d35Cc6634C0532925a3b844Bc454e4438f44e";
-const OWNER_ACCOUNT = "0x5B38Da6a701c568545dCfcB03FcB875f56beddC4";
-const UNAUTHORIZED_ACCOUNT = "0xAb8483F64d9C6d1EcF9b849Ae677dD3315835cb2";
-
-// Global State
+// Application State Variables
 let provider = null;
 let signer = null;
 let contract = null;
 let currentAccount = null;
-let contractOwnerAddress = OWNER_ACCOUNT;
-let isSimulationMode = false;
-
-// In-Memory storage for simulation fallback
-let simulatedCertificates = {
-  1: {
-    id: 1,
-    studentName: "Aarav Sharma",
-    courseName: "B.Tech Computer Science & Engineering",
-    certificateDataHash: "REG-2024-CSE-8921",
-    issueTimestamp: Math.floor(Date.now() / 1000) - 86400,
-    isValid: true
-  }
-};
-let simulatedCertCount = 1;
+let contractOwnerAddress = null;
 
 // Initialize on page load
 window.addEventListener("DOMContentLoaded", () => {
@@ -145,14 +129,17 @@ window.addEventListener("DOMContentLoaded", () => {
 });
 
 function initApp() {
-  const savedAddress = localStorage.getItem("certi_contract_address") || DEFAULT_CONTRACT;
-  document.getElementById("contractAddressInput").value = savedAddress;
-  
+  const savedAddress = localStorage.getItem("certi_contract_address");
+  if (savedAddress) {
+    document.getElementById("contractAddressInput").value = savedAddress;
+  }
+
   if (window.ethereum) {
     provider = new ethers.BrowserProvider(window.ethereum);
-    logToConsole("MetaMask detected in browser. Ready for live wallet handshake.", "info");
+    logToConsole("MetaMask extension detected. Click 'Connect MetaMask' to connect your wallet.", "info");
   } else {
-    logToConsole("MetaMask extension not detected. Enabled Simulated Ganache Mode for local testing.", "warn");
+    logToConsole("MetaMask extension not found in this browser. Please install MetaMask to use this DApp.", "error");
+    showToast("MetaMask Required", "Please install the MetaMask browser extension to interact with the blockchain.", "error");
   }
 }
 
@@ -163,74 +150,69 @@ function setupEventListeners() {
     if (address) {
       loadContract(address);
     } else {
-      alert("Please enter a valid deployed contract address first.");
+      alert("Please paste your deployed contract address first.");
     }
   });
 
   if (window.ethereum) {
-    window.ethereum.on("accountsChanged", (accounts) => {
-      if (accounts.length > 0) {
+    // Listen to real MetaMask account switches
+    window.ethereum.on("accountsChanged", async (accounts) => {
+      if (accounts && accounts.length > 0) {
         currentAccount = accounts[0];
+        if (provider) signer = await provider.getSigner();
+        if (contract && signer) {
+          contract = contract.connect(signer);
+        }
         updateAccountUI();
-        logToConsole(`Active MetaMask account changed to: ${currentAccount}`, "info");
+        logToConsole(`Active MetaMask account switched to: ${currentAccount}`, "info");
+        showToast("Account Switched", `Active wallet: ${currentAccount.substring(0, 10)}...`, "info");
       } else {
         currentAccount = null;
+        signer = null;
         updateAccountUI();
-        logToConsole("Wallet disconnected.", "warn");
+        logToConsole("Wallet disconnected in MetaMask.", "warn");
       }
     });
 
+    // Listen to network change
     window.ethereum.on("chainChanged", () => {
       window.location.reload();
     });
   }
 }
 
-// Connect Wallet (MetaMask or Simulated fallback)
+// Connect MetaMask
 async function connectWallet() {
-  if (window.ethereum) {
-    try {
-      logToConsole("Requesting account access from MetaMask...", "info");
-      const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
-      currentAccount = accounts[0];
-
-      provider = new ethers.BrowserProvider(window.ethereum);
-      signer = await provider.getSigner();
-      const network = await provider.getNetwork();
-      
-      updateAccountUI();
-      document.getElementById("networkDot").classList.add("connected");
-      document.getElementById("networkName").innerText = `${network.name || "Chain"} (ID: ${network.chainId})`;
-      
-      logToConsole(`MetaMask connected: ${currentAccount} on Chain ID ${network.chainId}`, "success");
-      showToast("MetaMask Connected", `Wallet ${currentAccount.substring(0, 8)}... connected successfully.`, "success");
-
-      const addressInput = document.getElementById("contractAddressInput").value.trim();
-      if (addressInput) loadContract(addressInput);
-      return;
-    } catch (error) {
-      console.warn("MetaMask handshake error:", error);
-      logToConsole(`MetaMask error: ${error.message}. Switching to Ganache Simulation mode.`, "warn");
-    }
+  if (!window.ethereum) {
+    alert("MetaMask is not installed. Please install MetaMask to connect.");
+    return;
   }
 
-  // Fallback to Simulated Ganache Provider
-  isSimulationMode = true;
-  currentAccount = OWNER_ACCOUNT;
-  contractOwnerAddress = OWNER_ACCOUNT;
-  
-  updateAccountUI();
-  document.getElementById("networkDot").classList.add("connected");
-  document.getElementById("networkName").innerText = "Ganache Local (Chain ID: 1337)";
-  
-  document.getElementById("statInstitution").innerText = "National Institute of Technology";
-  document.getElementById("statOwner").innerText = OWNER_ACCOUNT;
-  document.getElementById("statTotalCertificates").innerText = simulatedCertCount.toString();
-  document.getElementById("contractStatusText").innerText = `Connected: ${DEFAULT_CONTRACT.substring(0, 10)}... (Ganache)`;
-  document.getElementById("contractStatusText").style.color = "#34d399";
+  try {
+    logToConsole("Requesting wallet access via MetaMask...", "info");
+    const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+    currentAccount = accounts[0];
 
-  logToConsole(`Connected via Simulated Ganache RPC: ${currentAccount} (Authority Owner)`, "success");
-  showToast("Wallet Connected (Ganache)", `Authority account ${currentAccount.substring(0, 10)}... connected on local network.`, "success");
+    provider = new ethers.BrowserProvider(window.ethereum);
+    signer = await provider.getSigner();
+    const network = await provider.getNetwork();
+
+    updateAccountUI();
+    document.getElementById("networkDot").classList.add("connected");
+    document.getElementById("networkName").innerText = `${network.name || "Network"} (ID: ${network.chainId})`;
+
+    logToConsole(`Connected wallet: ${currentAccount} on Chain ID ${network.chainId}`, "success");
+    showToast("Wallet Connected", `Connected: ${currentAccount.substring(0, 8)}... on Chain ${network.chainId}`, "success");
+
+    const address = document.getElementById("contractAddressInput").value.trim();
+    if (address) {
+      await loadContract(address);
+    }
+  } catch (error) {
+    console.error("MetaMask connection failed:", error);
+    logToConsole(`Connection error: ${error.message}`, "error");
+    showToast("Connection Error", error.message, "error");
+  }
 }
 
 function updateAccountUI() {
@@ -254,37 +236,33 @@ function updateAccountUI() {
       roleBadge.innerText = "Authority (Owner)";
     } else {
       roleBadge.className = "role-badge role-unauthorized";
-      roleBadge.innerText = "Student / Unauthorized";
+      roleBadge.innerText = "Non-Owner (Unauthorized)";
     }
   } else {
     btn.innerHTML = `<span>Connect MetaMask</span>`;
     btn.classList.add("btn-primary");
     btn.classList.remove("btn-outline");
     accDisplay.innerText = "Not connected";
+    bar.style.display = "none";
   }
 }
 
-// Toggle Account between Owner and Unauthorized Account
-function toggleSimulatedAccount() {
-  if (!currentAccount) {
-    connectWallet();
-    return;
-  }
-
-  if (currentAccount.toLowerCase() === OWNER_ACCOUNT.toLowerCase()) {
-    currentAccount = UNAUTHORIZED_ACCOUNT;
-    updateAccountUI();
-    logToConsole(`Switched active wallet to: ${currentAccount} (Unauthorized Student Account)`, "warn");
-    showToast("Switched Account", "Now testing as UNAUTHORIZED account (0xAb84...5cb2). Any issue attempt will revert!", "error");
-  } else {
-    currentAccount = OWNER_ACCOUNT;
-    updateAccountUI();
-    logToConsole(`Switched active wallet back to: ${currentAccount} (University Authority Owner)`, "success");
-    showToast("Switched Account", "Now logged in as AUTHORITY OWNER (0x5B38...eddC4). Transactions permitted.", "success");
+// Request MetaMask to switch accounts
+async function requestAccountSwitch() {
+  if (!window.ethereum) return;
+  try {
+    // Open MetaMask permission prompt to select/switch account
+    await window.ethereum.request({
+      method: "wallet_requestPermissions",
+      params: [{ eth_accounts: {} }]
+    });
+  } catch (err) {
+    // If user cancels or not supported, provide instructions
+    alert("In MetaMask, click the circle account icon at the top and select Account 2 (or create a second account) to test unauthorized access.");
   }
 }
 
-// Load Smart Contract Instance
+// Load Smart Contract at address on the active chain
 async function loadContract(address) {
   try {
     if (!ethers.isAddress(address)) {
@@ -292,22 +270,36 @@ async function loadContract(address) {
       return;
     }
 
-    if (isSimulationMode) {
-      document.getElementById("contractStatusText").innerText = `Connected: ${address.substring(0, 8)}...`;
-      document.getElementById("contractStatusText").style.color = "#34d399";
-      logToConsole(`Simulated Contract loaded at ${address}`, "success");
+    if (!provider) {
+      if (!window.ethereum) {
+        alert("MetaMask is required to query the contract.");
+        return;
+      }
+      provider = new ethers.BrowserProvider(window.ethereum);
+    }
+
+    // Verify code exists on chain at this address
+    const code = await provider.getCode(address);
+    if (code === "0x" || code === "0x0") {
+      const err = "No smart contract found at this address on the currently connected network.";
+      document.getElementById("contractStatusText").innerText = "No contract at address";
+      document.getElementById("contractStatusText").style.color = "#f87171";
+      logToConsole(`Error: ${err}`, "error");
+      alert(err + "\nMake sure you are on the same network in MetaMask where you deployed the contract in Remix.");
       return;
     }
 
-    if (!provider) provider = new ethers.BrowserProvider(window.ethereum);
-    if (!signer && window.ethereum) signer = await provider.getSigner();
+    if (!signer && window.ethereum) {
+      signer = await provider.getSigner();
+    }
 
     contract = new ethers.Contract(address, CONTRACT_ABI, signer || provider);
     localStorage.setItem("certi_contract_address", address);
-    
-    document.getElementById("contractStatusText").innerText = `Connected: ${address.substring(0, 8)}...`;
+
+    document.getElementById("contractStatusText").innerText = `Loaded: ${address.substring(0, 10)}...`;
     document.getElementById("contractStatusText").style.color = "#34d399";
-    logToConsole(`Contract loaded successfully at ${address}`, "success");
+    logToConsole(`Contract loaded on-chain at: ${address}`, "success");
+    showToast("Contract Loaded", `Successfully connected to contract ${address.substring(0, 8)}...`, "success");
 
     await refreshContractStats();
   } catch (error) {
@@ -318,14 +310,8 @@ async function loadContract(address) {
   }
 }
 
-// Fetch on-chain institution summary
+// Query on-chain institution summary
 async function refreshContractStats() {
-  if (isSimulationMode) {
-    document.getElementById("statInstitution").innerText = "National Institute of Technology";
-    document.getElementById("statOwner").innerText = OWNER_ACCOUNT;
-    document.getElementById("statTotalCertificates").innerText = simulatedCertCount.toString();
-    return;
-  }
   if (!contract) return;
   try {
     const summary = await contract.getInstitutionSummary();
@@ -337,9 +323,10 @@ async function refreshContractStats() {
     document.getElementById("statOwner").innerText = contractOwnerAddress;
     document.getElementById("statTotalCertificates").innerText = totalCount;
 
-    logToConsole(`Fetched on-chain summary: Institution="${instName}", Total Certificates=${totalCount}`, "info");
+    updateAccountUI();
+    logToConsole(`On-chain state read: Institution="${instName}", Owner=${contractOwnerAddress}, Certificates=${totalCount}`, "info");
   } catch (error) {
-    console.error("Error reading stats:", error);
+    console.error("Error reading contract stats:", error);
   }
 }
 
@@ -363,10 +350,18 @@ function switchAdminTab(tab) {
   }
 }
 
-// Handle Issue Certificate Transaction (Admin)
+// Real On-Chain Certificate Issuance (Requires Owner Signer)
 async function handleIssueCertificate(e) {
   if (e) e.preventDefault();
-  if (!currentAccount) await connectWallet();
+
+  if (!contract) {
+    alert("Please load your deployed contract first.");
+    return;
+  }
+  if (!signer) {
+    await connectWallet();
+    if (!signer) return;
+  }
 
   const studentName = document.getElementById("studentNameInput").value;
   const courseName = document.getElementById("courseNameInput").value;
@@ -374,133 +369,128 @@ async function handleIssueCertificate(e) {
 
   const submitBtn = document.getElementById("submitIssueBtn");
   submitBtn.disabled = true;
-  submitBtn.innerText = "Broadcasting Transaction...";
+  submitBtn.innerText = "Confirm in MetaMask...";
 
   try {
-    logToConsole(`Initiating transaction: issueCertificate("${studentName}", "${courseName}", "${certHash}")...`, "info");
+    logToConsole(`Calling contract.issueCertificate("${studentName}", "${courseName}", "${certHash}")...`, "info");
     
-    // Check Unauthorized access
-    if (currentAccount.toLowerCase() !== contractOwnerAddress.toLowerCase()) {
-      throw new Error("Error: Unauthorized! Only the university authority can perform this action.");
-    }
+    // Connect contract with active signer
+    const contractWithSigner = contract.connect(signer);
 
-    // Check Input validation
-    if (!studentName || !studentName.trim()) {
-      throw new Error("Validation Error: Student name cannot be empty.");
-    }
-    if (!courseName || !courseName.trim()) {
-      throw new Error("Validation Error: Course name cannot be empty.");
-    }
+    // This triggers MetaMask popup and executes real on-chain transaction
+    const tx = await contractWithSigner.issueCertificate(studentName, courseName, certHash);
+    
+    logToConsole(`Transaction submitted! Hash: ${tx.hash}`, "info");
+    submitBtn.innerText = "Mining Transaction...";
+    showToast("Transaction Pending", `Submitted to blockchain. Tx: ${tx.hash.substring(0, 18)}...`, "info", tx.hash);
 
-    let txHash = "0x" + Array.from({length: 64}, () => Math.floor(Math.random()*16).toString(16)).join("");
-    let newId = simulatedCertCount + 1;
+    // Wait for real block confirmation
+    const receipt = await tx.wait(1);
 
-    if (!isSimulationMode && contract) {
-      const tx = await contract.issueCertificate(studentName, courseName, certHash);
-      txHash = tx.hash;
-      submitBtn.innerText = "Mining Transaction...";
-      const receipt = await tx.wait(1);
-      logToConsole(`Transaction mined in block #${receipt.blockNumber}! Gas Used: ${receipt.gasUsed.toString()}`, "success");
-      await refreshContractStats();
-    } else {
-      // Simulation delay
-      await new Promise(r => setTimeout(r, 600));
-      simulatedCertCount++;
-      newId = simulatedCertCount;
-      simulatedCertificates[newId] = {
-        id: newId,
-        studentName: studentName,
-        courseName: courseName,
-        certificateDataHash: certHash,
-        issueTimestamp: Math.floor(Date.now() / 1000),
-        isValid: true
-      };
-      refreshContractStats();
-      logToConsole(`Transaction Mined! Block #142857. Certificate #${newId} recorded.`, "success");
-    }
+    logToConsole(`Transaction mined in block #${receipt.blockNumber}! Gas used: ${receipt.gasUsed.toString()}`, "success");
+    showToast("Certificate Issued On-Chain!", `Successfully mined in block #${receipt.blockNumber}.`, "success", tx.hash);
 
-    logToConsole(`Certificate #${newId} successfully issued on-chain! Tx: ${txHash}`, "success");
-    showToast(
-      `Certificate #${newId} Issued Successfully!`,
-      `Record minted on Ethereum blockchain for ${studentName}.`,
-      "success",
-      txHash
-    );
-
-    document.getElementById("verifyIdInput").value = newId;
+    await refreshContractStats();
     document.getElementById("issueCertForm").reset();
   } catch (error) {
-    console.error("Issue Certificate error:", error);
+    console.error("Issue transaction failed:", error);
     const reason = extractRevertReason(error);
-    logToConsole(`Transaction Reverted / Blocked: "${reason}"`, "error");
-    showToast("Transaction Reverted by EVM", reason, "error");
+    logToConsole(`Transaction Reverted: ${reason}`, "error");
+    showToast("Transaction Reverted", reason, "error");
+    alert(`Transaction Failed on Blockchain:\n\n${reason}`);
   } finally {
     submitBtn.disabled = false;
     submitBtn.innerText = "Issue Certificate on Blockchain";
   }
 }
 
-// Handle Revoke Certificate Transaction (Admin)
+// Real On-Chain Certificate Revocation (Calls contract.revokeCertificate)
 async function handleRevokeCertificate(e) {
   if (e) e.preventDefault();
+
+  if (!contract) {
+    alert("Please load your deployed contract first.");
+    return;
+  }
+  if (!signer) {
+    await connectWallet();
+    if (!signer) return;
+  }
+
   const id = document.getElementById("revokeIdInput").value;
+  if (!id) {
+    alert("Please enter a Certificate ID to revoke.");
+    return;
+  }
+
   const submitBtn = document.getElementById("submitRevokeBtn");
   submitBtn.disabled = true;
+  submitBtn.innerText = "Confirm in MetaMask...";
 
   try {
-    if (currentAccount.toLowerCase() !== contractOwnerAddress.toLowerCase()) {
-      throw new Error("Error: Unauthorized! Only the university authority can perform this action.");
-    }
+    logToConsole(`Calling contract.revokeCertificate(${id})...`, "info");
+    const contractWithSigner = contract.connect(signer);
 
-    if (simulatedCertificates[id]) {
-      simulatedCertificates[id].isValid = false;
-    }
+    const tx = await contractWithSigner.revokeCertificate(id);
+    logToConsole(`Revocation tx submitted! Hash: ${tx.hash}`, "info");
+    submitBtn.innerText = "Mining Transaction...";
 
-    const txHash = "0x" + Array.from({length: 64}, () => Math.floor(Math.random()*16).toString(16)).join("");
-    logToConsole(`Certificate #${id} marked REVOKED on blockchain. Tx: ${txHash}`, "warn");
-    showToast(`Certificate #${id} Revoked`, "Certificate marked permanently invalid for fraud protection.", "error", txHash);
+    const receipt = await tx.wait(1);
+    logToConsole(`Certificate #${id} revoked on-chain in block #${receipt.blockNumber}!`, "success");
+    showToast(`Certificate #${id} Revoked On-Chain`, `Mined in block #${receipt.blockNumber}.`, "success", tx.hash);
+
+    await refreshContractStats();
     document.getElementById("revokeCertForm").reset();
   } catch (error) {
+    console.error("Revoke error:", error);
     const reason = extractRevertReason(error);
-    logToConsole(`Revocation Failed: ${reason}`, "error");
+    logToConsole(`Revocation Reverted: ${reason}`, "error");
     showToast("Revocation Failed", reason, "error");
+    alert(`Revocation Failed on Blockchain:\n\n${reason}`);
   } finally {
     submitBtn.disabled = false;
+    submitBtn.innerText = "Revoke Certificate";
   }
 }
 
-// Handle Verify Certificate (Public Query - Read Call)
+// Real On-Chain Credential Verification (Read Call)
 async function handleVerifyCertificate(e) {
   if (e) e.preventDefault();
+
+  if (!contract) {
+    alert("Please load your deployed contract first.");
+    return;
+  }
+
   const id = document.getElementById("verifyIdInput").value;
+  if (!id) {
+    alert("Please enter a Certificate ID to verify.");
+    return;
+  }
+
   const submitBtn = document.getElementById("submitVerifyBtn");
   submitBtn.disabled = true;
-  submitBtn.innerText = "Querying...";
+  submitBtn.innerText = "Querying On-Chain...";
 
   try {
-    logToConsole(`Querying blockchain state for Certificate ID #${id}...`, "info");
+    logToConsole(`Querying blockchain for Certificate ID #${id}...`, "info");
     
-    let cert = null;
-    if (!isSimulationMode && contract) {
-      cert = await contract.verifyCertificate(id);
-    } else {
-      await new Promise(r => setTimeout(r, 400));
-      cert = simulatedCertificates[id];
-      if (!cert) {
-        throw new Error("Validation Error: Certificate not found for the provided ID.");
-      }
-    }
+    // Call contract view function
+    const cert = await contract.verifyCertificate(id);
 
-    document.getElementById("resCertId").innerText = `#${cert.id.toString()}`;
-    document.getElementById("resStudentName").innerText = cert.studentName;
-    document.getElementById("resCourseName").innerText = cert.courseName;
-    document.getElementById("resCertHash").innerText = cert.certificateDataHash;
+    // Format retrieved blockchain data
+    document.getElementById("resCertId").innerText = `#${cert[0].toString()}`;
+    document.getElementById("resStudentName").innerText = cert[1];
+    document.getElementById("resCourseName").innerText = cert[2];
+    document.getElementById("resCertHash").innerText = cert[3];
 
-    const date = new Date(Number(cert.issueTimestamp) * 1000);
+    const timestamp = Number(cert[4]);
+    const date = new Date(timestamp * 1000);
     document.getElementById("resTimestamp").innerText = date.toUTCString();
 
+    const isValid = cert[5];
     const badge = document.getElementById("resCertStatusBadge");
-    if (cert.isValid) {
+    if (isValid) {
       badge.className = "cert-badge badge-valid";
       badge.innerHTML = "<span>&#x2714; AUTHENTIC & VALID</span>";
     } else {
@@ -511,96 +501,59 @@ async function handleVerifyCertificate(e) {
     document.getElementById("verifyPlaceholder").style.display = "none";
     document.getElementById("certPreviewCard").classList.add("active");
 
-    logToConsole(`Retrieved Certificate #${id}: Student="${cert.studentName}", Status=${cert.isValid ? "Valid" : "Revoked"}`, "success");
-    showToast("Certificate Verified", `Credential record #${id} retrieved from Ethereum blockchain.`, "success");
+    logToConsole(`Data retrieved on-chain for Certificate #${id}: Student="${cert[1]}", Valid=${isValid}`, "success");
+    showToast("Certificate Verified", `Record #${id} retrieved from Ethereum blockchain.`, "success");
   } catch (error) {
-    console.error("Verification error:", error);
+    console.error("Verification query error:", error);
     const reason = extractRevertReason(error);
-    logToConsole(`Verification Failed: ${reason}`, "error");
-    showToast("Verification Failed", reason, "error");
+    logToConsole(`Verification Query Failed: ${reason}`, "error");
+    showToast("Verification Error", reason, "error");
+    alert(`Verification Query Failed:\n\n${reason}`);
   } finally {
     submitBtn.disabled = false;
     submitBtn.innerText = "Verify Data";
   }
 }
 
-// 1-Click Assignment Test Scenarios
-async function fillTestScenario(type) {
+// Assignment Test Fillers (Populates inputs without faking the transaction)
+function fillTestScenario(type) {
+  switchAdminTab("issue");
+
   if (type === "valid") {
-    switchAdminTab("issue");
-    if (currentAccount !== OWNER_ACCOUNT) {
-      currentAccount = OWNER_ACCOUNT;
-      updateAccountUI();
-    }
     document.getElementById("studentNameInput").value = "Aarav Sharma";
     document.getElementById("courseNameInput").value = "B.Tech Computer Science & Engineering";
     document.getElementById("certHashInput").value = "REG-2024-CSE-8921";
-    logToConsole("Test 1 Prepared: Valid inputs loaded. Executing valid transaction...", "info");
-    await handleIssueCertificate();
+    logToConsole("Test 1: Valid inputs filled. Click 'Issue Certificate on Blockchain' to confirm via MetaMask.", "info");
+    showToast("Inputs Prepared", "Valid student details loaded. Click Issue to sign transaction.", "info");
   } else if (type === "invalid") {
-    switchAdminTab("issue");
-    if (currentAccount !== OWNER_ACCOUNT) {
-      currentAccount = OWNER_ACCOUNT;
-      updateAccountUI();
-    }
+    // Clear student name to demonstrate require(bytes(_studentName).length > 0)
     document.getElementById("studentNameInput").value = "";
     document.getElementById("courseNameInput").value = "B.Tech Computer Science";
     document.getElementById("certHashInput").value = "REG-FAIL-TEST";
-    logToConsole("Test 2 Executing: Testing invalid empty input against require(...) check...", "warn");
-    await handleIssueCertificate();
+    logToConsole("Test 2: Empty student name filled. Click 'Issue Certificate on Blockchain' to see the contract revert on-chain.", "warn");
+    showToast("Invalid Input Prepared", "Empty name loaded. Click Issue to see on-chain revert error.", "info");
   } else if (type === "unauthorized") {
-    switchAdminTab("issue");
-    currentAccount = UNAUTHORIZED_ACCOUNT;
-    updateAccountUI();
     document.getElementById("studentNameInput").value = "Imposter Student";
     document.getElementById("courseNameInput").value = "B.Tech Data Science";
     document.getElementById("certHashInput").value = "REG-UNAUTH-01";
-    logToConsole("Test 3 Executing: Calling issueCertificate() from Unauthorized Account...", "warn");
-    await handleIssueCertificate();
+    logToConsole("Test 3: Make sure you switch to Account 2 (Non-Owner) in MetaMask, then click 'Issue Certificate' to trigger the onlyOwner revert.", "warn");
+    alert("Test 3 (Unauthorized Test Instructions):\n\n1. In your MetaMask extension, switch to Account 2 (or any account that did NOT deploy the contract).\n2. Then click 'Issue Certificate on Blockchain'.\n\nYour smart contract's onlyOwner modifier will reject the transaction with:\n'Error: Unauthorized! Only the university authority can perform this action.'");
   }
 }
 
-// Show Floating Toast Alert
-function showToast(title, desc, type = "success", txHash = null) {
-  const container = document.getElementById("toastContainer");
-  if (!container) return;
-
-  const toast = document.createElement("div");
-  toast.className = `toast toast-${type === "error" ? "error" : "success"}`;
-
-  const icon = type === "error" ? "&#x26A0;" : "&#x2714;";
-  
-  let hashHtml = "";
-  if (txHash) {
-    hashHtml = `<div class="toast-hash">Tx: ${txHash.substring(0, 22)}...</div>`;
-  }
-
-  toast.innerHTML = `
-    <div class="toast-icon">${icon}</div>
-    <div class="toast-body">
-      <div class="toast-title">${escapeHtml(title)}</div>
-      <div class="toast-desc">${escapeHtml(desc)}</div>
-      ${hashHtml}
-    </div>
-  `;
-
-  container.appendChild(toast);
-  setTimeout(() => {
-    toast.style.transition = "opacity 0.4s ease";
-    toast.style.opacity = "0";
-    setTimeout(() => toast.remove(), 400);
-  }, 6000);
-}
-
-// Helper: Extract clean revert reason
+// Extract clean revert reason string from ethers.js error object
 function extractRevertReason(err) {
   if (err.reason) return err.reason;
   if (err.data && err.data.message) return err.data.message;
+  if (err.error && err.error.message) return err.error.message;
+  if (err.info && err.info.error && err.info.error.message) return err.info.error.message;
+  if (err.shortMessage) return err.shortMessage;
   if (err.message) {
-    if (err.message.includes("Unauthorized")) return "Error: Unauthorized! Only the university authority can perform this action.";
-    if (err.message.includes("Student name cannot be empty")) return "Validation Error: Student name cannot be empty.";
-    if (err.message.includes("Certificate not found")) return "Validation Error: Certificate not found for the provided ID.";
-    return err.message;
+    const match = err.message.match(/reverted with reason string '([^']+)'/);
+    if (match) return match[1];
+    const customMatch = err.message.match(/reverted with custom error '([^']+)'/);
+    if (customMatch) return customMatch[1];
+    return err.message.length > 130 ? err.message.substring(0, 130) + "..." : err.message;
   }
   return "Transaction reverted by EVM.";
 }
@@ -613,7 +566,7 @@ function logToConsole(message, type = "info") {
   const time = new Date().toLocaleTimeString();
   const entry = document.createElement("div");
   entry.className = "log-entry";
-  
+
   let typeClass = "log-msg-info";
   if (type === "success") typeClass = "log-msg-success";
   else if (type === "warn") typeClass = "log-msg-warn";
@@ -631,6 +584,37 @@ function logToConsole(message, type = "info") {
 function clearLogs() {
   const consoleBox = document.getElementById("consoleBox");
   if (consoleBox) consoleBox.innerHTML = "";
+}
+
+// Floating Toast Notification
+function showToast(title, desc, type = "info", txHash = null) {
+  const container = document.getElementById("toastContainer");
+  if (!container) return;
+
+  const toast = document.createElement("div");
+  toast.className = `toast toast-${type === "error" ? "error" : "success"}`;
+
+  const icon = type === "error" ? "&#x26A0;" : "&#x2714;";
+  let hashHtml = "";
+  if (txHash) {
+    hashHtml = `<div class="toast-hash">Tx: ${txHash.substring(0, 18)}...</div>`;
+  }
+
+  toast.innerHTML = `
+    <div class="toast-icon">${icon}</div>
+    <div class="toast-body">
+      <div class="toast-title">${escapeHtml(title)}</div>
+      <div class="toast-desc">${escapeHtml(desc)}</div>
+      ${hashHtml}
+    </div>
+  `;
+
+  container.appendChild(toast);
+  setTimeout(() => {
+    toast.style.transition = "opacity 0.4s ease";
+    toast.style.opacity = "0";
+    setTimeout(() => toast.remove(), 400);
+  }, 5000);
 }
 
 function escapeHtml(text) {
