@@ -128,8 +128,10 @@ window.addEventListener("DOMContentLoaded", () => {
   setupEventListeners();
 });
 
+const DEPLOYED_CONTRACT_ADDRESS = "0xCfEB869F69431e42cdB54A4F4f105C19C080A601";
+
 function initApp() {
-  const savedAddress = localStorage.getItem("certi_contract_address");
+  const savedAddress = localStorage.getItem("certi_contract_address") || DEPLOYED_CONTRACT_ADDRESS;
   if (savedAddress) {
     document.getElementById("contractAddressInput").value = savedAddress;
   }
