@@ -539,32 +539,6 @@ async function handleVerifyCertificate(e) {
   }
 }
 
-// Assignment Test Fillers (Populates inputs without faking the transaction)
-function fillTestScenario(type) {
-  switchAdminTab("issue");
-
-  if (type === "valid") {
-    document.getElementById("studentNameInput").value = "Aarav Sharma";
-    document.getElementById("courseNameInput").value = "B.Tech Computer Science & Engineering";
-    document.getElementById("certHashInput").value = "REG-2024-CSE-8921";
-    logToConsole("Test 1: Valid inputs filled. Click 'Issue Certificate on Blockchain' to confirm via MetaMask.", "info");
-    showToast("Inputs Prepared", "Valid student details loaded. Click Issue to sign transaction.", "info");
-  } else if (type === "invalid") {
-    // Clear student name to demonstrate require(bytes(_studentName).length > 0)
-    document.getElementById("studentNameInput").value = "";
-    document.getElementById("courseNameInput").value = "B.Tech Computer Science";
-    document.getElementById("certHashInput").value = "REG-FAIL-TEST";
-    logToConsole("Test 2: Empty student name filled. Click 'Issue Certificate on Blockchain' to see the contract revert on-chain.", "warn");
-    showToast("Invalid Input Prepared", "Empty name loaded. Click Issue to see on-chain revert error.", "info");
-  } else if (type === "unauthorized") {
-    document.getElementById("studentNameInput").value = "Imposter Student";
-    document.getElementById("courseNameInput").value = "B.Tech Data Science";
-    document.getElementById("certHashInput").value = "REG-UNAUTH-01";
-    logToConsole("Test 3: Make sure you switch to Account 2 (Non-Owner) in MetaMask, then click 'Issue Certificate' to trigger the onlyOwner revert.", "warn");
-    alert("Test 3 (Unauthorized Test Instructions):\n\n1. In your MetaMask extension, switch to Account 2 (or any account that did NOT deploy the contract).\n2. Then click 'Issue Certificate on Blockchain'.\n\nYour smart contract's onlyOwner modifier will reject the transaction with:\n'Error: Unauthorized! Only the university authority can perform this action.'");
-  }
-}
-
 // Extract clean revert reason string from ethers.js error object
 function extractRevertReason(err) {
   if (err.reason) return err.reason;

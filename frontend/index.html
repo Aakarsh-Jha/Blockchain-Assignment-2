@@ -204,41 +204,6 @@
 
     </div>
 
-    <!-- Assignment 2 Testing Assistant Panel -->
-    <section class="testing-panel">
-      <div class="testing-title">
-        <span>⚡ Assignment 2 Required Test Scenarios (1-Click Fillers)</span>
-      </div>
-      <div class="test-grid">
-        <!-- Test Case 1 -->
-        <div class="test-card">
-          <div>
-            <h4>Test 1: Valid Transaction</h4>
-            <p>Fills valid student details and submits via owner account. Expected: Transaction succeeds and certificate is minted.</p>
-          </div>
-          <button class="btn btn-outline" onclick="fillTestScenario('valid')">Prepare Valid Input</button>
-        </div>
-
-        <!-- Test Case 2 -->
-        <div class="test-card">
-          <div>
-            <h4>Test 2: Invalid Input</h4>
-            <p>Attempts to submit with empty name or blank fields. Expected: Contract validation reverts with descriptive error message.</p>
-          </div>
-          <button class="btn btn-outline" onclick="fillTestScenario('invalid')">Trigger Invalid Test</button>
-        </div>
-
-        <!-- Test Case 3 -->
-        <div class="test-card">
-          <div>
-            <h4>Test 3: Unauthorized Input</h4>
-            <p>Submits request from an unauthorized account (non-owner). Expected: Contract modifier reverts with "Unauthorized" error.</p>
-          </div>
-          <button class="btn btn-outline" onclick="fillTestScenario('unauthorized')">Explain / Run Unauthorized Test</button>
-        </div>
-      </div>
-    </section>
-
     <!-- Activity & Transaction Log Console -->
     <section class="console-card">
       <div class="console-header">

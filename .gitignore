@@ -17,3 +17,5 @@ package-lock.json
 .cache/
 build/
 dist/
+package.json
+generate_submission_docs.py

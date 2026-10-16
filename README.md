@@ -50,9 +50,10 @@ Blockchain IA2/
 ---
 
 ## 4. Deployment Details
-* **Deployment Network:** Ganache Local Network (Chain ID: `1337` / `5777`) or Ethereum Sepolia Testnet (Chain ID: `11155111`)
-* **Deployed Smart Contract Address:** `0x742d35Cc6634C0532925a3b844Bc454e4438f44e` *(Update with your deployed address from Remix)*
-* **Compiler Version:** `0.8.20` / `0.8.26` (Remix IDE)
+* **Deployment Network:** Ganache Local Network (Chain ID: `1337`, RPC: `http://127.0.0.1:8545`)
+* **Deployed Smart Contract Address:** `0xCfEB869F69431e42cdB54A4F4f105C19C080A601`
+* **Issuing Authority (Owner):** `0x90F8bf6A479f320ead074411a4B0e7944Ea8c9C1`
+* **Compiler Version:** `0.8.20` (`evmVersion: 'paris'`)
 * **Optimization:** Enabled (200 runs)
 
 ---
