@@ -1,0 +1,19 @@
+# Operating System Files
+.DS_Store
+Thumbs.db
+
+# Secrets & Credentials (CRITICAL REQUIREMENT: Do not upload private keys/seed phrases)
+.env
+.env.local
+*.key
+*.pem
+secrets.json
+
+# Dependencies
+node_modules/
+package-lock.json
+
+# Cache & Build Artifacts
+.cache/
+build/
+dist/
